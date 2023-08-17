@@ -1,0 +1,179 @@
+#include <iostream>
+#include <windows.h>
+#include <glad/glad.h>
+#include "glad.c"
+#include <GLFW/glfw3.h>
+#include <stb_image.h>
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
+
+#include "Texture.h"
+#include "shaderClass.h"
+#include "VertexArray.h"
+#include "VertexBuffer.h"
+#include "IndexBuffer.h"
+#include "Camera.h"
+BOOL CALLBACK EnumWindowsProc(HWND hwnd, LPARAM lParam)
+{
+    HWND p = FindWindowEx(hwnd, NULL, L"SHELLDLL_DefView", NULL);
+    HWND* ret = (HWND*)lParam;
+
+    if (p)
+    {
+        // Gets the WorkerW Window after the current one.
+        *ret = FindWindowEx(NULL, hwnd, L"WorkerW", NULL);
+    }
+    return true;
+}
+
+HWND get_wallpaper_window()
+{
+    // Fetch the Progman window
+    HWND progman = FindWindow(L"ProgMan", NULL);
+    // Send 0x052C to Progman. This message directs Progman to spawn a 
+    // WorkerW behind the desktop icons. If it is already there, nothing 
+    // happens.
+    SendMessageTimeout(progman, 0x052C, 0, 0, SMTO_NORMAL, 1000, nullptr);
+    // We enumerate all Windows, until we find one, that has the SHELLDLL_DefView 
+    // as a child. 
+    // If we found that window, we take its next sibling and assign it to workerw.
+    HWND wallpaper_hwnd = nullptr;
+    EnumWindows(EnumWindowsProc, (LPARAM)&wallpaper_hwnd);
+    // Return the handle you're looking for.
+    return wallpaper_hwnd;
+}
+float deltaTime = 0.0f;
+float lastFrame = 0.0f;
+unsigned int width = 1920;
+unsigned int height = 1080;
+
+// Vertices coordinates
+GLfloat vertices[] = {
+    -1.0f, -1.0f,
+    1.0f, -1.0f,
+    1.0f,  1.0f,
+    1.0f,  1.0f,
+    -1.0f,  1.0f,
+    -1.0f, -1.0f
+};
+
+// Indices for vertices order
+
+int main()
+{
+
+
+    HWND a = get_wallpaper_window();
+    RECT rect;
+    GetClientRect(a, &rect);
+
+    // Calculate the resolution
+    int width = rect.right - rect.left;
+    int height = rect.bottom - rect.top;
+
+    // Output the resolution
+    std::cout << "Window Resolution: " << width << "x" << height << std::endl;
+
+    return 0;
+    // Initialize GLFW
+    glfwInit();
+
+    // Tell GLFW what version of OpenGL we are using
+    // In this case we are using OpenGL 3.3
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    // Tell GLFW we are using the CORE profile
+    // So that means we only have the modern functions
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+
+    // Create a GLFWwindow object of 800 by 800 pixels, naming it "YoutubeOpenGL"
+    GLFWwindow* window = glfwCreateWindow(width, height, "temp for test", NULL, NULL);
+    // Error check if the window fails to create
+    if (window == NULL)
+    {
+        std::cout << "Failed to create GLFW window" << std::endl;
+        glfwTerminate();
+        return -1;
+    }
+    // Introduce the window into the current context
+    glfwMakeContextCurrent(window);
+
+    // Load GLAD so it configures OpenGL
+    gladLoadGL();
+
+    // Specify the viewport of OpenGL in the Window
+    // In this case, the viewport goes from x = 0, y = 0, to x = 800, y = 800
+    glViewport(0, 0, width, height);
+
+
+
+    // Generates Shader object using shaders default.vert and default.frag
+    Shader shaderProgram("./resources/shaders/experimenting.vert", "./resources/shaders/experimenting.frag");
+    glm::mat4 projection = glm::perspective(glm::radians(45.0f), static_cast<float>(width) / static_cast<float>(height), 0.0f, 100.0f);
+    // Generates Vertex Array Object and binds it
+    VAO VAO1;
+    VAO1.Bind();
+
+    // Generates Vertex Buffer Object and links it to vertices
+    VBO VBO1(vertices, sizeof(vertices));
+
+    // Links VBO attributes such as coordinates and colors to VAO
+    VAO1.LinkAttrib(VBO1, 0, 2, GL_FLOAT, 2 * sizeof(float), nullptr);
+    // Unbind all to prevent accidentally modifying them
+    VAO1.Unbind();
+    VBO1.Unbind();
+    // Main while loop
+    while (!glfwWindowShouldClose(window))
+    {
+        if (glfwGetWindowAttrib(window, GLFW_MAXIMIZED) == GLFW_TRUE)
+        {
+            int newWidth, newHeight;
+            glfwGetFramebufferSize(window, &newWidth, &newHeight);
+            if (newWidth != width || newHeight != height)
+            {
+                width = newWidth;
+                height = newHeight;
+                glViewport(0, 0, newWidth, newHeight);
+
+                // Update the projection matrix here if needed
+                // ...
+                projection = glm::perspective(glm::radians(100.0f), static_cast<float>(newWidth) / static_cast<float>(newHeight), 0.0f, 100.0f);
+            }
+        }
+
+        float currentFrame = glfwGetTime();
+        deltaTime = currentFrame - lastFrame;
+        lastFrame = currentFrame;
+
+        // Specify the color of the background
+        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+        // Clean the back buffer and depth buffer
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        // Tell OpenGL which Shader Program we want to use
+        shaderProgram.Activate();
+
+        glUniform1f(glGetUniformLocation(shaderProgram.ID, "iTime"), currentFrame);
+        glUniform2f(glGetUniformLocation(shaderProgram.ID, "screenResolution"), static_cast<float>(width), static_cast<float>(height));
+        glUniformMatrix4fv(glGetUniformLocation(shaderProgram.ID, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
+
+        VAO1.Bind();
+        // Draw primitives, number of indices, datatype of indices, index of indices
+        glDrawArrays(GL_TRIANGLES, 0, 6);
+        // Swap the back buffer with the front buffer
+        glfwSwapBuffers(window);
+        // Take care of all GLFW events
+        glfwPollEvents();
+    }
+
+    // Delete all the objects we've created
+    VAO1.Delete();
+    VBO1.Delete();
+    shaderProgram.Delete();
+
+    // Delete window before ending the program
+    glfwDestroyWindow(window);
+    // Terminate GLFW before ending the program
+    glfwTerminate();
+    return 0;
+}
